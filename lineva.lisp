@@ -41,7 +41,11 @@ nothing is found."
     (or (gethash symbol *expander-table*)
         (error "Unknown key ~S in *EXPANDER-TABLE*" symbol)))
 
-  (defparameter *rest-code-name* '$rest-code))
+  (defparameter *rest-code-name* '$rest-code)
+
+  (defun unary-p (list)
+    "Return true if LIST is a list containing only one element."
+    (and list (listp list) (null (cdr list)))))
 
 (defmacro leva (&body body)
   "Evaluate every instruction in BODY sequentially. Every instruction
@@ -55,26 +59,25 @@ where compound-form can be any valid lisp form except the first
 two. See `definst' for more information about user-defined
 instruction-name."
   (loop :with body* := (reverse body)
-        :and need-head-p := nil
         :and result := nil
         :for step :in body*
         :for step* := (if (keywordp step) (list step) step)
         :if (and step* (listp step*) (keywordp (car step*))) :do
           (destructuring-bind (key &rest params) step*
             (let* ((expander (find-expander key))
-                   (rest-code (if need-head-p `(progn ,@result) result))
+                   (rest-code (if (unary-p result)
+                                  (first result)
+                                  `(progn ,@result)))
                    (result* (funcall expander key rest-code params)))
-              (setf result result*
-                    need-head-p nil)))
+              (setf result (list result*))))
         :else
-          :do (setf result (cons step* result)
-                    need-head-p t)
+          :do (push step* result)
         :end
         :finally
            (return
-             (if need-head-p
-                 `(progn ,@result)
-                 result))))
+             (if (unary-p result)
+                 (first result)
+                 `(progn ,@result)))))
 
 (defmacro definst (keyword lambda-list &body body)
   "Define a instruction named KEYWORD. KEYWORD and LAMBDA-LIST
@@ -106,7 +109,8 @@ instruction KEYWORD."
                    (declare (ignore ,key))
                    (destructuring-bind ,lambda-list ,params
                      ,@body*))))
-    (when doc (setf (gethash keyword *expander-document-table*) doc))))
+    (when doc (setf (gethash keyword *expander-document-table*) doc)))
+  nil)
 
 (defmethod documentation (keyword (type (eql 'la:instruction)))
   (declare (ignore type))
@@ -120,13 +124,28 @@ instruction KEYWORD."
           "Value of documentation should be a string, but found ~S" new-value)
   (setf (gethash object *expander-document-table*) new-value))
 
-(definst :println (format-string &rest arguments)
-  "Print content to standard output and append new line. FORMAT-STRING
-and ARGUMENTS have the same meaning of `format'.
+(definst :printf (format-string &rest arguments)
+  "Print content to standard output. FORMAT-STRING and ARGUMENTS have
+the same meaning of `format'.
 
-  >>> (la:leva (:println \"Hello, ~A!\" \"world\"))"
+  >>> (la:leva (:printf \"Hello ~S!~%\" :world))"
   `(progn (format t ,format-string ,@arguments)
-          (terpri)
+          ,$rest-code))
+
+(definst :println (thing)
+  "Print content to standard output and add newline. Use `princ' to
+output.
+
+  >>> (la:leva (:println \"Hello world!\"))"
+  `(progn (princ ,thing) (terpri)
+          ,$rest-code))
+
+(definst :pn (thing)
+  "Print content to standard output and add newline. Use `prin1' to
+output.
+
+  >>> (la:leva (:pn \"Hello world!\"))"
+  `(progn (prin1 ,thing) (terpri)
           ,$rest-code))
 
 (definst :let (&rest let-arguments)
@@ -149,7 +168,7 @@ value. LET-ARGUMENTS has the same meaning of `let'.
       $rest-code
       (destructuring-bind (name value) (first let-arguments)
         `(let ((,name ,value))
-           (assert ,name (,name) "~A should be general true" ',name)
+           (assert ,name (,name) "~A should not be `nil'" ',name)
            (leva
              (:let-assert ,@(rest let-arguments))
              ,$rest-code)))))
