@@ -124,6 +124,8 @@ instruction KEYWORD."
           "Value of documentation should be a string, but found ~S" new-value)
   (setf (gethash object *expander-document-table*) new-value))
 
+;; Display
+
 (definst :printf (format-string &rest arguments)
   "Print content to standard output. FORMAT-STRING and ARGUMENTS have
 the same meaning of `format'.
@@ -148,6 +150,8 @@ output.
   `(progn (prin1 ,thing) (terpri)
           ,$rest-code))
 
+;; Local variable
+
 (definst :let (&rest let-arguments)
   "Define local variables by `let'. LET-ARGUMENTS has the same
 meaning of `let'.
@@ -161,7 +165,7 @@ meaning of `let'.
   "Define local variables by `let' and assert its
 value. LET-ARGUMENTS has the same meaning of `let'.
 
->>> (la:leva
+  >>> (la:leva
       (:let-assert (x 10) (y 20) (z nil))
       (+ x y z))"
   (if (null let-arguments)
@@ -172,3 +176,45 @@ value. LET-ARGUMENTS has the same meaning of `let'.
            (leva
              (:let-assert ,@(rest let-arguments))
              ,$rest-code)))))
+
+(definst :flet (&rest flet-arguments)
+  "Define local function by `flet', FLET-ARGUMENTS has the same
+meaning with `flet'.
+
+  >>> (leva
+        (:flet (add1 (x) (+ 1 x))
+               (dot2 (x) (* 2 x)))
+        (dot2 (add1 10)))"
+  `(flet ,flet-arguments ,$rest-code))
+
+(definst :labels (&rest labels-arguments)
+  "Define local function by `labels'. LABELS-ARGUMENTS has the same
+meaning with `labels'
+
+  >>> (leva
+        (:labels (fib (n)
+                      (if (< n 2)
+                          1
+                          (+ (fib (- n 1)) (fib (- n 2))))))
+        (fib 5))"
+  `(labels ,labels-arguments ,$rest-code))
+
+(definst :macrolet (&rest macrolet-arguments)
+  "Define local macro by `macrolet'. MACROLET-ARGUMENTS has the same
+meaning with `macrolet'.
+
+  >>> (leva
+        (:macrolet (record (&rest values) `(list ,@values)))
+        (record \"Joe\" 20 nil))"
+  `(macrolet ,macrolet-arguments ,$rest-code))
+
+(definst :defun (name lambda-list &body body)
+  "Define a local function by `labels'.
+
+  >>> (leva
+        (:defun fac (n)
+          (if (zerop n)
+              1
+              (* n (fac (- n 1)))))
+        (fac 3))"
+  `(labels ((,name ,lambda-list ,@body)) ,$rest-code))
