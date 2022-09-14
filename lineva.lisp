@@ -79,6 +79,19 @@ instruction-name."
                  (first result)
                  `(progn ,@result)))))
 
+(always-eval
+  (defun has-docstring-p (body)
+    "Determine whether BODY has docstring."
+    (and body (stringp (first body))))
+  (defun extract-docstring (keyword lambda-list body)
+    "Extract docstring and construct a better docstring by KEYWORD
+and LAMBDA-LIST."
+    (let ((origin-doc (if (has-docstring-p body) (first body) nil))
+          (header (format nil "~S ~S" keyword lambda-list)))
+      (if origin-doc
+          (format nil "~A~%~%~A" header origin-doc)
+          header))))
+
 (defmacro definst (keyword lambda-list &body body)
   "Define a instruction named KEYWORD. KEYWORD and LAMBDA-LIST
 correspond to step in `eva':
@@ -102,8 +115,8 @@ instruction KEYWORD."
   (remhash keyword *expander-document-table*)
   (let* ((key (gensym "key"))
          (params (gensym "params"))
-         (doc (if (and body (stringp (first body))) (car body) nil))
-         (body* (if doc (cdr body) body)))
+         (doc (extract-docstring keyword lambda-list body))
+         (body* (if (has-docstring-p body) (cdr body) body)))
     (setf (gethash keyword *expander-table*)
           (eval `(lambda (,key ,*rest-code-name* ,params)
                    (declare (ignore ,key))
@@ -123,6 +136,20 @@ instruction KEYWORD."
   (assert (stringp new-value) (new-value)
           "Value of documentation should be a string, but found ~S" new-value)
   (setf (gethash object *expander-document-table*) new-value))
+
+(defun available-instructions ()
+  "Return all defined instructions."
+  (loop :for key :being :the :hash-keys :of *expander-table*
+        :collecting key))
+
+(defun describe-instruction (keyword &optional (stream *standard-output*))
+  "Display documentation of KEYWORD."
+  (let ((doc (documentation keyword 'instruction)))
+    (if doc
+        (princ doc stream)
+        (format stream "Instruction is not found. Available instructions:~%~A"
+                (available-instructions)))
+    (terpri stream)))
 
 ;; Display
 
@@ -218,3 +245,20 @@ meaning with `macrolet'.
               (* n (fac (- n 1)))))
         (fac 3))"
   `(labels ((,name ,lambda-list ,@body)) ,$rest-code))
+
+(definst :defvar (name &optional value)
+  "Define a local variable by `let'.
+
+  >>> (leva
+        (:defvar x 10)
+        x)"
+  `(let ((,name ,value))
+     ,$rest-code))
+
+(definst :bind (lambda-list expression)
+  "Define local variables by `destructuring-bind'.
+
+  >>> (leva
+        (:bind (a b &rest c) '(1 2 3 4 5))
+        (list a b c))"
+  `(destructuring-bind ,lambda-list ,expression ,$rest-code))
