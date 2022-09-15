@@ -7,10 +7,9 @@
     ...)"
   `(eval-when (:compile-toplevel :load-toplevel :execute) ,@body))
 
-(always-eval
-  (defparameter *expander-table*
-    (make-hash-table :test #'eq)
-    "A table of code transformer, whose keys are symbols and values are
+(defparameter *expander-table*
+  (make-hash-table :test #'eq)
+  "A table of code transformer, whose keys are symbols and values are
 function which has signature
 
   (KEY REST-CODE OTHER-PARAMETERS) -> CODE
@@ -31,16 +30,17 @@ the function corresponding to K₂ will receive code expanded from
 as its REST-CODE. OTHER-PARAMETERS is a parameter list customized by
 user, which correspond to ... in the code above.")
 
-  (defparameter *expander-document-table*
-    (make-hash-table :test #'eq)
-    "Documentation table of item in *expander-table*")
+(defparameter *expander-document-table*
+  (make-hash-table :test #'eq)
+  "Documentation table of item in *expander-table*")
 
-  (defun find-expander (symbol)
-    "Find expander in *expander-table* by SYMBOL, signal a error if
+(defun find-expander (symbol)
+  "Find expander in *expander-table* by SYMBOL, signal a error if
 nothing is found."
-    (or (gethash symbol *expander-table*)
-        (error "Unknown key ~S in *EXPANDER-TABLE*" symbol)))
+  (or (gethash symbol *expander-table*)
+      (error "Unknown key ~S in *EXPANDER-TABLE*" symbol)))
 
+(always-eval
   (defparameter *rest-code-name* '$rest-code)
 
   (defun unary-p (list)
@@ -92,6 +92,16 @@ and LAMBDA-LIST."
           (format nil "~A~%~%~A" header origin-doc)
           header))))
 
+(defun define-instruction (keyword docstring function)
+  "Define a new instruction called KEYWORD with FUNCTION. If the
+instruction has been defined, the old definition will be ignored."
+  (when (remhash keyword *expander-table*)
+    (warn "Instruction ~S has been defined. Old definition will be ignored"
+          keyword))
+  (remhash keyword *expander-document-table*)
+  (setf (gethash keyword *expander-table*) function
+        (gethash keyword *expander-document-table*) docstring))
+
 (defmacro definst (keyword lambda-list &body body)
   "Define a instruction named KEYWORD. KEYWORD and LAMBDA-LIST
 correspond to step in `eva':
@@ -109,21 +119,15 @@ element of BODY is a `string', it will be seen as `documentation' of
 instruction KEYWORD."
   (assert (keywordp keyword) (keyword)
           "Name of instruction should be a keyword, but found ~S" keyword)
-  (when (remhash keyword *expander-table*)
-    (warn "Instruction ~S has been defined. Old definition will be ignored"
-          keyword))
-  (remhash keyword *expander-document-table*)
   (let* ((key (gensym "key"))
          (params (gensym "params"))
          (doc (extract-docstring keyword lambda-list body))
          (body* (if (has-docstring-p body) (cdr body) body)))
-    (setf (gethash keyword *expander-table*)
-          (eval `(lambda (,key ,*rest-code-name* ,params)
-                   (declare (ignore ,key))
-                   (destructuring-bind ,lambda-list ,params
-                     ,@body*))))
-    (when doc (setf (gethash keyword *expander-document-table*) doc)))
-  nil)
+    `(define-instruction ,keyword ,doc
+       (lambda (,key ,*rest-code-name* ,params)
+         (declare (ignore ,key))
+         (destructuring-bind ,lambda-list ,params
+           ,@body*)))))
 
 (defmethod documentation (keyword (type (eql 'la:instruction)))
   (declare (ignore type))

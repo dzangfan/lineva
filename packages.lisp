@@ -3,6 +3,6 @@
 (defpackage :lineva
   (:nicknames :la)
   (:use :common-lisp)
-  (:export #:instruction #:definst #:leva #:$rest-code
+  (:export #:instruction #:definst #:leva
            #:available-instructions #:describe-instruction)
   (:documentation "Package providing linear evaluation feature."))
