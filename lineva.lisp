@@ -100,7 +100,8 @@ instruction has been defined, the old definition will be ignored."
           keyword))
   (remhash keyword *expander-document-table*)
   (setf (gethash keyword *expander-table*) function
-        (gethash keyword *expander-document-table*) docstring))
+        (gethash keyword *expander-document-table*) docstring)
+  (values))
 
 (defmacro definst (keyword lambda-list &body body)
   "Define a instruction named KEYWORD. KEYWORD and LAMBDA-LIST
@@ -212,7 +213,7 @@ value. LET-ARGUMENTS has the same meaning of `let'.
   "Define local function by `flet', FLET-ARGUMENTS has the same
 meaning with `flet'.
 
-  >>> (leva
+  >>> (la:leva
         (:flet (add1 (x) (+ 1 x))
                (dot2 (x) (* 2 x)))
         (dot2 (add1 10)))"
@@ -222,7 +223,7 @@ meaning with `flet'.
   "Define local function by `labels'. LABELS-ARGUMENTS has the same
 meaning with `labels'
 
-  >>> (leva
+  >>> (la:leva
         (:labels (fib (n)
                       (if (< n 2)
                           1
@@ -234,15 +235,24 @@ meaning with `labels'
   "Define local macro by `macrolet'. MACROLET-ARGUMENTS has the same
 meaning with `macrolet'.
 
-  >>> (leva
+  >>> (la:leva
         (:macrolet (record (&rest values) `(list ,@values)))
         (record \"Joe\" 20 nil))"
   `(macrolet ,macrolet-arguments ,$rest-code))
 
+(definst :symbol-macrolet (&rest symbol-macrolet-arguments)
+  " Define a local symbol-macro by `symbol-macrolet'.
+SYMBOL-MACROLET-ARGUMENTS has the same meaning with
+`symbol-macrolet'.
+
+  >>> (la:leva (:symbol-macrolet (x (format t \"...~%\")))
+        (list x x x))"
+  `(symbol-macrolet ,symbol-macrolet-arguments ,$rest-code))
+
 (definst :defun (name lambda-list &body body)
   "Define a local function by `labels'.
 
-  >>> (leva
+  >>> (la:leva
         (:defun fac (n)
           (if (zerop n)
               1
@@ -253,7 +263,7 @@ meaning with `macrolet'.
 (definst :defvar (name &optional value)
   "Define a local variable by `let'.
 
-  >>> (leva
+  >>> (la:leva
         (:defvar x 10)
         x)"
   `(let ((,name ,value))
@@ -262,7 +272,61 @@ meaning with `macrolet'.
 (definst :bind (lambda-list expression)
   "Define local variables by `destructuring-bind'.
 
-  >>> (leva
+  >>> (la:leva
         (:bind (a b &rest c) '(1 2 3 4 5))
         (list a b c))"
   `(destructuring-bind ,lambda-list ,expression ,$rest-code))
+
+(definst :setf (&rest setf-arguments)
+  "Invoke `setf' with SETF-ARGUMENTS.
+
+  >>> (la:leva
+        (:let (x (list 1 2 3)))
+        (:setf (car x) 3)
+        x)"
+  `(progn (setf ,@setf-arguments)
+          ,$rest-code))
+
+;; Debug
+
+(definst :break (&optional format-control &rest format-arguments)
+  "Enter debugger by call `break'. Arguments has the same meaning with
+`break'.
+
+  >>> (la:leva  
+        (:break \"Let's ~A!!!\" :burn))"
+  (let ((break-args (and format-control `(,format-control ,@format-arguments))))
+    `(progn (break ,@break-args) ,$rest-code)))
+
+(definst :inspect (object)
+  "Enter inspector with OBJECT.
+
+  >>> (la:leva
+        (:defvar x '(:foo :bar))
+        (:inspect x))"
+  `(progn (inspect ,object) ,$rest-code))
+
+;; Control flow
+
+(definst :assert (&rest conditions)
+  "Quickly assert that all CONDITIONS is true.
+
+  >>> (la:leva
+        (:defvar x 10)
+        (:assert (numberp x) (plusp x) (evenp x))
+        x)"
+  (if (null conditions)
+      $rest-code
+      `(progn
+         (assert ,(first conditions))
+         (leva (:assert ,@(cdr conditions))
+           ,$rest-code))))
+
+(definst :return (value &key (if t))
+  "Return VALUE if condition IF is true.
+
+  >>> (la:leva
+        (:defvar x (read))
+        (:return (- x) :if (minusp x))
+        x)"
+  `(if ,if ,value ,$rest-code))
