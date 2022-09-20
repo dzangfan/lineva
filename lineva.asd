@@ -3,7 +3,7 @@
 (defsystem :lineva
   :description "Linear evaluation macro"
   :version "0.0.1"
-  :author "Zhangfan Li <li-fn@outlook.com>"
+  :author "Li Dzangfan <li-fn@outlook.com>"
   :licence "GPLv3"
   :depends-on ()
   :components ((:file "packages")
