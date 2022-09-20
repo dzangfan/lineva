@@ -51,13 +51,22 @@ nothing is found."
   "Evaluate every instruction in BODY sequentially. Every instruction
 has one of following form:
 
-  :instruction-name
   (:instruction-name ...)
+  :instruction-name [= (:instruction-name)]
   compound-form
 
 where compound-form can be any valid lisp form except the first
-two. See `definst' for more information about user-defined
-instruction-name."
+two. For example
+
+  (la:leva
+    (:let (x 10) (y 20))                  ; Define local variables
+    :break                                ; Create breakpoint
+    (list x y))                           ; Any Lisp form
+
+See `definst' for more information about user-defined
+instruction-name. See `available-instructions' for all defined
+instructions. Use `describe-instruction' to get document of a
+instruction."
   (loop :with body* := (reverse body)
         :and result := nil
         :for step :in body*
@@ -105,7 +114,7 @@ instruction has been defined, the old definition will be ignored."
 
 (defmacro definst (keyword lambda-list &body body)
   "Define a instruction named KEYWORD. KEYWORD and LAMBDA-LIST
-correspond to step in `eva':
+correspond to instruction in `leva':
 
   (KEYWORD LAMBDA-LIST...)
 
@@ -115,9 +124,21 @@ i.e.
 
 the BODY is a code which yield real code that the instruction KEYWORD
 defined. Special symbol `$rest-code' represents rest code of linear
-evaluation. See `*expander-table*' for more information. If the first
-element of BODY is a `string', it will be seen as `documentation' of
-instruction KEYWORD."
+evaluation. If the first element of BODY is a `string', it will be
+seen as `documentation' of instruction KEYWORD. For example
+
+  (definst :println (thing)
+    \"Print THING and newline.\"
+    `(progn (princ ,thing) (terpri)
+            ,$rest-code))
+
+then
+
+  (la:leva (:println \"Hello world!\") (values))
+
+will expand to
+
+  (progn (princ \"Hello world!\") (terpri) (values))"
   (assert (keywordp keyword) (keyword)
           "Name of instruction should be a keyword, but found ~S" keyword)
   (let* ((key (gensym "key"))
@@ -277,7 +298,7 @@ SYMBOL-MACROLET-ARGUMENTS has the same meaning with
         (list a b c))"
   `(destructuring-bind ,lambda-list ,expression ,$rest-code))
 
-(definst :setf (place value &ket if)
+(definst :setf (place value &key (if t))
   "Invoke `setf' to set PLACE to VALUE if IF is not `nil'.
 
   >>> (la:leva
@@ -353,12 +374,12 @@ SYMBOL-MACROLET-ARGUMENTS has the same meaning with
 `nil', evaluate rest code.
 
   >>> (la:leva
-  (:defvar table
-    '(:bing \"cn.bing.com\"))
-  (:try (getf table :google)
-        (getf table :duckduckgo)
-        (getf table :bing))
-  \"No search engine available.\")"
+        (:defvar table
+          '(:bing \"cn.bing.com\"))
+        (:try (getf table :google)
+              (getf table :duckduckgo)
+              (getf table :bing))
+        \"No search engine available.\")"
   (if (null values)
       $rest-code
       `(or ,(car values)
