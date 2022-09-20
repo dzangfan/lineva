@@ -101,11 +101,9 @@ indirectly.")
   "Most frequently used forms in `defun' and `defmacro' which have
 more than one form in their bodies. Ran over 671 lisp files."
   :result ((DECLARE . 513) (LET . 163) (WHEN . 124) (CHECK-TYPE . 118)
-           
            (UNLESS . 79) (LET* . 62) (SETF . 53) (LOOP . 49) (IF . 39)
            (SB-INT:QUASIQUOTE . 34) (MULTIPLE-VALUE-BIND . 33)
            (ASSERT . 29) (FORMAT . 27) (OR . 23) (VALUES . 21)
-           
            (NIL . 19) (SETQ . 17) (COND . 17) (FAST-WRITE-SEQUENCE . 14)
            (CLRHASH . 14) (SIGNAL-ERROR-IF-CURRENT-THREAD . 14) (T . 14)
            (TEST-BROKEN-INPUT . 13) (APPLY . 13) (DOLIST . 13)

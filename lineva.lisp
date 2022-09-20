@@ -277,14 +277,15 @@ SYMBOL-MACROLET-ARGUMENTS has the same meaning with
         (list a b c))"
   `(destructuring-bind ,lambda-list ,expression ,$rest-code))
 
-(definst :setf (&rest setf-arguments)
-  "Invoke `setf' with SETF-ARGUMENTS.
+(definst :setf (place value &ket if)
+  "Invoke `setf' to set PLACE to VALUE if IF is not `nil'.
 
   >>> (la:leva
-        (:let (x (list 1 2 3)))
-        (:setf (car x) 3)
-        x)"
-  `(progn (setf ,@setf-arguments)
+        (:defvar name :alexandria)
+        (:setf name (symbol-name name)
+               :if (not (stringp name)))
+        name)"
+  `(progn (when ,if (setf ,place ,value))
           ,$rest-code))
 
 ;; Debug
@@ -306,7 +307,6 @@ SYMBOL-MACROLET-ARGUMENTS has the same meaning with
         (:inspect x))"
   `(progn (inspect ,object) ,$rest-code))
 
-;; Control flow
 
 (definst :assert (&rest conditions)
   "Quickly assert that all CONDITIONS is true.
@@ -322,6 +322,23 @@ SYMBOL-MACROLET-ARGUMENTS has the same meaning with
          (leva (:assert ,@(cdr conditions))
            ,$rest-code))))
 
+(definst :check-type (&rest check-type-parameters)
+  "Invoke `check-type' over each element of CHECK-TYPE-PARAMETERS.
+
+  >>> (la:leva
+        (:let (name \"Joe\") (age 20))
+        (:check-type (name (array character *) \"a string\")
+                     (age (integer 0 150)))
+        (list name age))"
+  (if (null check-type-parameters)
+      $rest-code
+      `(progn
+         (check-type ,@(car check-type-parameters))
+         (leva (:check-type ,@(cdr check-type-parameters))
+           ,$rest-code))))
+
+;; Control flow
+
 (definst :return (value &key (if t))
   "Return VALUE if condition IF is true.
 
@@ -330,3 +347,32 @@ SYMBOL-MACROLET-ARGUMENTS has the same meaning with
         (:return (- x) :if (minusp x))
         x)"
   `(if ,if ,value ,$rest-code))
+
+(definst :try (&rest values)
+  "Return first value in VALUES which is not `nil'. If all VALUES is
+`nil', evaluate rest code.
+
+  >>> (la:leva
+  (:defvar table
+    '(:bing \"cn.bing.com\"))
+  (:try (getf table :google)
+        (getf table :duckduckgo)
+        (getf table :bing))
+  \"No search engine available.\")"
+  (if (null values)
+      $rest-code
+      `(or ,(car values)
+           (leva (:try ,@(cdr values))
+             ,$rest-code))))
+
+(definst :defer (&rest forms)
+  "Evaluate rest code, then evaluate FORMS sequentially.
+
+  >>> (la:leva
+        (:defun close-conn () (format t \"Bye!~%\"))
+        (format t \"Hello!~%\")
+        (:defer (close-conn) (terpri))
+        (format t \"[...]~%\"))"
+  `(progn
+     ,$rest-code
+     ,@forms))
