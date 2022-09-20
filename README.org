@@ -1,0 +1,476 @@
+* Linear Evaluation Macro System
+
+** Introduction
+
+#+begin_src lisp
+  (defun read-first-line (file-name &optional required)
+    (la:leva
+      (:check-type (file-name (or (array character *) pathname)))
+      (:let (stream (open file-name)))
+      (:defer (close stream))
+      (:let (first-line (read-line stream nil)))
+      (:return first-line :if (not required))
+      (error "File ~A is empty" file-name)))
+
+  ;; Expand to
+
+  (defun read-first-line (file-name &optional required)
+    (progn
+      (check-type file-name (or (array character *) pathname))
+      (let ((stream (open file-name)))
+        (unwind-protect
+             (let ((first-line (read-line stream nil)))
+               (if (not required)
+                   first-line
+                   (error "File ~A is empty" file-name)))
+          (close stream)))))
+#+end_src
+
+Although S-exp is simple, consistent and unambiguous, we need
+non-S-exp feature in our code sometime. For example, in most
+programming languages like C, we can easily write
+
+#+begin_src C
+  char* file_name = get_file_name(stdin);
+  assert(file_name != NULL);
+  FILE* handle = open_file(file_name);
+  assert(handle != NULL);
+  Error* error = process(handle);
+  if (error != NULL) return FLAG_ERROR;
+  return FLAG_OK;
+#+end_src
+
+However, in Lisp, we have to write following code without defining
+macro:
+
+#+begin_src lisp
+  (let ((file-name (get-file-name stdin)))
+    (assert file-name)
+    (let ((handle (open-file file-name)))
+      (assert handle)
+      (let ((err (process handle)))
+        (if err
+            :error
+            :ok))))
+#+end_src
+
+Although the logic is simple, as the indentation increase and the
+forms nest with others, the code become somewhat complex. This package
+provides a more C-like style of sequential calculation.
+
+#+begin_src lisp
+  (la:leva
+    (:let (file-name (get-file-name stdin)))
+    (assert file-name)
+    (:let (handle (open-file file-name)))
+    (assert handle)
+    (:let (err (process handle)))
+    (if err :error :ok))
+#+end_src
+
+Another example is local functions in Lisp. In Scheme, we use ~define~
+to define a local function when the body of function is overlong,
+rather than ~let~:
+
+#+begin_src scheme
+  (define (sort lst)
+    (define (insert elt lst)
+      (cond [(null? lst) (list elt)]
+            [(< elt (car lst)) (cons elt lst)]
+            [else (cons (car lst)
+                        (insert elt (cdr lst)))]))
+    (if (null? lst)
+        lst
+        (insert (car lst)
+                (sort (cdr lst)))))
+#+end_src
+
+However, in Common Lisp, since ~defun~ always define a global function
+instead of a local function, ~labels~ and ~flet~ is widely used. But
+the code can become cumbersome quickly as the local functions get
+longer. Therefore, a Scheme-like feature for defining local functions
+is available in this package:
+
+#+begin_src lisp
+  (defun sort (lst)
+    (la:leva
+      (:defun insert (elt lst)
+        ...)
+      (if (null lst) ...)))
+#+end_src
+
+As we saw, ~leva~ (stand for Linearly EVAluate) is the main operator
+of this package. It is generally a superset of ~progn~: evaluate forms
+sequentially and treat forms led by ~keyword~ specially. Therefore,
+the title "Linear Evaluation Macro System" does not mean another
+evaluation rule or a replacement of current Lisp macro system, but a
+complement of it.
+
+** Use ~leva~
+
+~leva~ is the main macro of this package, it is generally a
+~progn~. However, forms in *top level* of body of ~leva~ will be treat
+as a *instruction*. Formally, ~leva~ take any number of forms and each
+form have one of following shape:
+
+1. ~(:name . LAMBDA-LIST)~
+2. ~:name~, which is a equivalent of ~(:name)~
+3. Any Lisp form except ~1.~ and ~2.~
+
+following forms are legal parameter of ~leva~:
+
+- ~(:break "Bang!")~
+- ~:break~
+- ~(format t "See you space cb")~
+
+Incidentally, ~:break~ is a built-in instruction corresponding to
+standard function ~break~ in Common Lisp. Note that a instruction is
+always a ~keyword~, which allows ~leva~ distinguish normal lisp form
+and instructions. Instructions is valid only in top level of
+~leva~. So the following code is invalid:
+
+#+begin_src lisp
+  (la:leva
+    (if (null lst)
+        (:return lst)))
+#+end_src
+
+** Create a Instruction
+
+A instruction generally works like macro, except
+
+1. only works in context of ~leva~
+2. take rest part of evaluation as a parameter
+
+The "rest part of evaluation" means code expanded from parameters of
+~leva~ which follows current instruction. Take the following code for
+example:
+
+#+begin_src lisp
+  (la:leva
+    (:let (x 1))
+    (:let (y 2))
+    (+ x y))
+#+end_src
+
+For instruction invocation ~(:let (y 2))~, ~(+ x y)~ is its "rest
+code"; for invocation ~(:let (x 1))~, code expanded from
+ ~(:let (y 2))~ is its "rest code". Normally, instruction should 
+not ignore  its "rest code".
+
+Instructions are defined by ~definst~, which is basically a equivalent
+of ~defmacro~ except a built-in variable ~$rest-code~ is visible in
+body of definition. For example, to define instruction ~let~, we can
+write:
+
+#+begin_src lisp
+  (definst :let (&rest let-arguments)
+    "Define local variables by `let'."
+    `(let ,let-arguments ,$rest-code))
+#+end_src
+
+The first parameter is always a ~keyword~. The second parameter is a
+lambda-list, which correspond to ~cdr~ part of instruction's
+invocation. Rest parameter is the macro body, which generates code
+like macro by implicit parameter ~$rest-code~. By convention, if the
+first component of body is a literal string, it will be interpreted as
+a docstring of this instruction.
+
+** Built-in Instructions
+
+A number of instructions have been defined. Available instructions can
+be found by ~(la:available-instructions)~; detail usage of the
+instruction can be found by ~(la:describe-instruction :instruction)~.
+
+*** Local Variables
+
+**** :let
+
+*lambda-list*: ~:LET (&REST LET-ARGUMENTS)~
+
+Define local variables by `let'. LET-ARGUMENTS has the same
+meaning of `let'.
+
+#+begin_src lisp
+(la:leva 
+  (:let (x 10) (y 20))
+  (+ x y))
+#+end_src
+
+
+**** :let-assert
+
+*lambda-list*: ~:LET-ASSERT (&REST LET-ARGUMENTS)~
+
+Define local variables by `let' and assert its
+value. LET-ARGUMENTS has the same meaning of `let'.
+
+#+begin_src lisp
+(la:leva
+(:let-assert (x 10) (y 20) (z nil))
+(+ x y z))
+#+end_src
+
+
+**** :flet
+
+*lambda-list*: ~:FLET (&REST FLET-ARGUMENTS)~
+
+Define local function by `flet', FLET-ARGUMENTS has the same
+meaning with `flet'.
+
+#+begin_src lisp
+(la:leva
+  (:flet (add1 (x) (+ 1 x))
+         (dot2 (x) (* 2 x)))
+  (dot2 (add1 10)))
+#+end_src
+
+
+**** :labels
+
+*lambda-list*: ~:LABELS (&REST LABELS-ARGUMENTS)~
+
+Define local function by `labels'. LABELS-ARGUMENTS has the same
+meaning with `labels'
+
+#+begin_src lisp
+(la:leva
+  (:labels (fib (n)
+                (if (< n 2)
+                    1
+                    (+ (fib (- n 1)) (fib (- n 2))))))
+  (fib 5))
+#+end_src
+
+
+**** :macrolet
+
+*lambda-list*: ~:MACROLET (&REST MACROLET-ARGUMENTS)~
+
+Define local macro by `macrolet'. MACROLET-ARGUMENTS has the same
+meaning with `macrolet'.
+
+#+begin_src lisp
+(la:leva
+  (:macrolet (record (&rest values) `(list ,@values)))
+  (record "Joe" 20 nil))
+#+end_src
+
+
+**** :symbol-macrolet
+
+*lambda-list*: ~:SYMBOL-MACROLET (&REST SYMBOL-MACROLET-ARGUMENTS)~
+
+ Define a local symbol-macro by `symbol-macrolet'.
+SYMBOL-MACROLET-ARGUMENTS has the same meaning with
+`symbol-macrolet'.
+
+#+begin_src lisp
+(la:leva (:symbol-macrolet (x (format t "...~%")))
+  (list x x x))
+#+end_src
+
+
+**** :defun
+
+*lambda-list*: ~:DEFUN (NAME LAMBDA-LIST &BODY BODY)~
+
+Define a local function by `labels'.
+
+#+begin_src lisp
+(la:leva
+  (:defun fac (n)
+    (if (zerop n)
+        1
+        (* n (fac (- n 1)))))
+  (fac 3))
+#+end_src
+
+
+**** :defvar
+
+*lambda-list*: ~:DEFVAR (NAME &OPTIONAL VALUE)~
+
+Define a local variable by `let'.
+
+#+begin_src lisp
+(la:leva
+  (:defvar x 10)
+  x)
+#+end_src
+
+
+**** :bind
+
+*lambda-list*: ~:BIND (LAMBDA-LIST EXPRESSION)~
+
+Define local variables by `destructuring-bind'.
+
+#+begin_src lisp
+(la:leva
+  (:bind (a b &rest c) '(1 2 3 4 5))
+  (list a b c))
+#+end_src
+
+
+**** :setf
+
+*lambda-list*: ~:SETF (PLACE VALUE &KEY (IF T))~
+
+Invoke `setf' to set PLACE to VALUE if IF is not `nil'.
+
+#+begin_src lisp
+(la:leva
+  (:defvar name :alexandria)
+  (:setf name (symbol-name name)
+         :if (not (stringp name)))
+  name)
+#+end_src
+
+
+*** Debug
+
+**** :break
+
+*lambda-list*: ~:BREAK (&OPTIONAL FORMAT-CONTROL &REST FORMAT-ARGUMENTS)~
+
+Enter debugger by call `break'. Arguments has the same meaning with
+`break'.
+
+#+begin_src lisp
+(la:leva  
+  (:break "Let's ~A!!!" :burn))
+#+end_src
+
+
+**** :inspect
+
+*lambda-list*: ~:INSPECT (OBJECT)~
+
+Enter inspector with OBJECT.
+
+#+begin_src lisp
+(la:leva
+  (:defvar x '(:foo :bar))
+  (:inspect x))
+#+end_src
+
+
+**** :assert
+
+*lambda-list*: ~:ASSERT (&REST CONDITIONS)~
+
+Quickly assert that all CONDITIONS is true.
+
+#+begin_src lisp
+(la:leva
+  (:defvar x 10)
+  (:assert (numberp x) (plusp x) (evenp x))
+  x)
+#+end_src
+
+
+**** :check-type
+
+*lambda-list*: ~:CHECK-TYPE (&REST CHECK-TYPE-PARAMETERS)~
+
+Invoke `check-type' over each element of CHECK-TYPE-PARAMETERS.
+
+#+begin_src lisp
+(la:leva
+  (:let (name "Joe") (age 20))
+  (:check-type (name (array character *) "a string")
+               (age (integer 0 150)))
+  (list name age))
+#+end_src
+
+
+*** Contro Flow
+
+**** :return
+
+*lambda-list*: ~:RETURN (VALUE &KEY (IF T))~
+
+Return VALUE if condition IF is true.
+
+#+begin_src lisp
+(la:leva
+  (:defvar x (read))
+  (:return (- x) :if (minusp x))
+  x)
+#+end_src
+
+
+**** :try
+
+*lambda-list*: ~:TRY (&REST VALUES)~
+
+Return first value in VALUES which is not `nil'. If all VALUES is
+`nil', evaluate rest code.
+
+#+begin_src lisp
+(la:leva
+  (:defvar table
+    '(:bing "cn.bing.com"))
+  (:try (getf table :google)
+        (getf table :duckduckgo)
+        (getf table :bing))
+  "No search engine available.")
+#+end_src
+
+
+**** :defer
+
+*lambda-list*: ~:DEFER (&REST FORMS)~
+
+Evaluate rest codes, then evaluate FORMS sequentially. Result of
+rest code will be returned. Evaluation of rest code will be protected
+by `unwind-protect'.
+
+#+begin_src lisp
+(la:leva
+  (:defun close-conn () (format t "Bye!~%"))
+  (format t "Hello!~%")
+  (:defer (close-conn) (terpri))
+  (format t "[...]~%"))
+#+end_src
+
+
+*** Display
+
+**** :printf
+
+*lambda-list*: ~:PRINTF (FORMAT-STRING &REST ARGUMENTS)~
+
+Print content to standard output. FORMAT-STRING and ARGUMENTS have
+the same meaning of `format'.
+
+#+begin_src lisp
+(la:leva (:printf "Hello ~S!~%" :world))
+#+end_src
+
+
+**** :println
+
+*lambda-list*: ~:PRINTLN (THING)~
+
+Print content to standard output and add newline. Use `princ' to
+output.
+
+#+begin_src lisp
+(la:leva (:println "Hello world!"))
+#+end_src
+
+
+**** :pn
+
+*lambda-list*: ~:PN (THING)~
+
+Print content to standard output and add newline. Use `prin1' to
+output.
+
+#+begin_src lisp
+(la:leva (:pn "Hello world!"))
+#+end_src
+

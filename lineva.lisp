@@ -387,13 +387,14 @@ SYMBOL-MACROLET-ARGUMENTS has the same meaning with
              ,$rest-code))))
 
 (definst :defer (&rest forms)
-  "Evaluate rest code, then evaluate FORMS sequentially.
+  "Evaluate rest codes, then evaluate FORMS sequentially. Result of
+rest code will be returned. Evaluation of rest code will be protected
+by `unwind-protect'.
 
   >>> (la:leva
         (:defun close-conn () (format t \"Bye!~%\"))
         (format t \"Hello!~%\")
         (:defer (close-conn) (terpri))
         (format t \"[...]~%\"))"
-  `(progn
-     ,$rest-code
+  `(unwind-protect ,$rest-code
      ,@forms))
