@@ -56,7 +56,7 @@ macro:
 
 Although the logic is simple, as the indentation increase and the
 forms nest with others, the code become somewhat complex. This package
-provides a more C-like style of sequential calculation.
+provides a C-like sequential calculation.
 
 #+begin_src lisp
   (la:leva
@@ -85,8 +85,8 @@ rather than ~let~:
                 (sort (cdr lst)))))
 #+end_src
 
-However, in Common Lisp, since ~defun~ always define a global function
-instead of a local function, ~labels~ and ~flet~ is widely used. But
+However, in Common Lisp, since ~defun~ always defines a global function
+instead of a local function, ~labels~ and ~flet~ are widely used. But
 the code can become cumbersome quickly as the local functions get
 longer. Therefore, a Scheme-like feature for defining local functions
 is available in this package:
