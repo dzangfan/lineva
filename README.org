@@ -108,7 +108,7 @@ complement of it.
 
 ** Installation
 
-Since ~leva~ does not depend other libraries, you can simply download
+Since ~leva~ does not depend on other libraries, you can simply download
 [[https://github.com/dzangfan/lineva.lisp/blob/main/lineva.lisp][lineva.lisp]] and ~load~ it. To enable ~leva~ cooperate with a bigger
 system, ~clone~ this repository and load [[https://github.com/dzangfan/lineva.lisp/blob/main/lineva.asd][lineva.asd]] by [[https://asdf.common-lisp.dev/][asdf]]. For
 example, the simplest way is that define your own system and make it
