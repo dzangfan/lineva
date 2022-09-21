@@ -106,6 +106,30 @@ the title "Linear Evaluation Macro System" does not mean another
 evaluation rule or a replacement of current Lisp macro system, but a
 complement of it.
 
+** Installation
+
+Since ~leva~ does not depend other libraries, you can simply download
+[[https://github.com/dzangfan/lineva.lisp/blob/main/lineva.lisp][lineva.lisp]] and ~load~ it. To enable ~leva~ cooperate with a bigger
+system, ~clone~ this repository and load [[https://github.com/dzangfan/lineva.lisp/blob/main/lineva.asd][lineva.asd]] by [[https://asdf.common-lisp.dev/][asdf]]. For
+example, the simplest way is that define your own system and make it
+depend on ~lineva~:
+
+#+begin_src lisp
+  ;; foo.asd
+
+  (require :asdf)
+
+  (in-package :asdf-user)
+
+  (push "/path/to/lineva.lisp/" asdf:*central-registry*)
+
+  (defsystem :foo
+    :depends-on (:lineva)
+    :components ())
+#+end_src
+
+Check [[https://asdf.common-lisp.dev/asdf/][document of asdf]] for more details.
+
 ** Use ~leva~
 
 ~leva~ is the main macro of this package, it is generally a
