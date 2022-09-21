@@ -175,7 +175,8 @@ will expand to
 (defun available-instructions ()
   "Return all defined instructions."
   (loop :for key :being :the :hash-keys :of *expander-table*
-        :collecting key))
+        :collecting key :into keys
+        :finally (return (sort keys #'string<))))
 
 (defun describe-instruction (keyword &optional (stream *standard-output*))
   "Display documentation of KEYWORD."
