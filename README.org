@@ -9,7 +9,7 @@
       (:let (stream (open file-name)))
       (:defer (close stream))
       (:let (first-line (read-line stream nil)))
-      (:return first-line :if (not required))
+      (:return first-line :if (or (not required) first-line))
       (error "File ~A is empty" file-name)))
 
   ;; Expand to
@@ -20,7 +20,7 @@
       (let ((stream (open file-name)))
         (unwind-protect
              (let ((first-line (read-line stream nil)))
-               (if (not required)
+               (if (or (not required) first-line)
                    first-line
                    (error "File ~A is empty" file-name)))
           (close stream)))))
