@@ -26,7 +26,7 @@
           (close stream)))))
 #+end_src
 
-Although S-exp is simple, consistent and unambiguous, we need
+Although S-exp is simple, consistent and unambiguous, we do need
 non-S-exp feature in our code sometime. For example, in most
 programming languages like C, we can easily write
 
