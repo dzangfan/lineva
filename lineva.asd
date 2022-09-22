@@ -6,4 +6,13 @@
   :author "Li Dzangfan <li-fn@outlook.com>"
   :licence "GPLv3"
   :depends-on ()
-  :components ((:file "lineva")))
+  :components ((:file "lineva"))
+  :in-order-to ((test-op (test-op :lineva/test))))
+
+(defsystem :lineva/test
+  :description "lineva's test suite"
+  :author "Li Dzangfan <li-fn@outlook.com>"
+  :license "GPLv3"
+  :depends-on (:fiveam :lineva)
+  :components ((:file "lineva-test"))
+  :perform (test-op (o c) (symbol-call :fiveam :run!)))
